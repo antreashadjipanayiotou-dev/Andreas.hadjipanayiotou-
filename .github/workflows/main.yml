@@ -1,0 +1,83 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Android project
+        run: |
+          set -e
+
+          if [ -f "AndreasAppFinal-EDITABLE.zip" ]; then
+            unzip -o "AndreasAppFinal-EDITABLE.zip" -d extracted
+            cp -r extracted/AndreasAppFinal/. .
+            rm -rf extracted
+          elif [ -f "AndreasAppFinal-TOP-NAV-FINAL.zip" ]; then
+            unzip -o "AndreasAppFinal-TOP-NAV-FINAL.zip" -d extracted
+            cp -r extracted/AndreasAppFinal/. .
+            rm -rf extracted
+          elif [ -f "Andreas-Hadjipanayiotou-Final-Android-App.zip" ]; then
+            unzip -o "Andreas-Hadjipanayiotou-Final-Android-App.zip" -d extracted
+            cp -r extracted/AndreasAppFinal/. .
+            rm -rf extracted
+          elif [ -d "AndreasAppFinal" ]; then
+            cp -r AndreasAppFinal/. .
+          else
+            echo "Android project ZIP/folder not found."
+            exit 1
+          fi
+
+      - name: Fix Java/Kotlin JVM target
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/build.gradle.kts")
+          text = p.read_text()
+
+          if "compileOptions {" not in text:
+              addition = (
+                  "    compileOptions {\n"
+                  "        sourceCompatibility = JavaVersion.VERSION_17\n"
+                  "        targetCompatibility = JavaVersion.VERSION_17\n"
+                  "    }\n\n"
+                  "    kotlinOptions {\n"
+                  "        jvmTarget = \"17\"\n"
+                  "    }\n\n"
+              )
+              text = text.replace("    compileSdk = 36\n", "    compileSdk = 36\n\n" + addition)
+
+          p.write_text(text)
+          PY
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platforms;android-36 build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Andreas-Hadjipanayiotou-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
